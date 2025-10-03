@@ -845,10 +845,13 @@ CREATE POLICY "Allow all for history" ON history
             }
         }
 
-        // Crear solicitud
+        // Crear solicitud - CORREGIDO
         async function createRequest(event) {
             event.preventDefault();
-            if (!supabase) return;
+            if (!supabaseClient) {
+                alert('❌ No hay conexión con Supabase. Por favor conecta primero.');
+                return;
+            }
             
             const title = document.getElementById('title').value;
             const description = document.getElementById('description').value;
@@ -857,7 +860,7 @@ CREATE POLICY "Allow all for history" ON history
             
             try {
                 if (currentType === 'incident') {
-                    const { data, error } = await supabase
+                    const { data, error } = await supabaseClient
                         .from('incidents')
                         .insert([{
                             incident_id: `INC-${Date.now()}`,
@@ -872,7 +875,7 @@ CREATE POLICY "Allow all for history" ON history
                     if (error) throw error;
                     alert('✅ Incidencia creada exitosamente!');
                 } else {
-                    const { data, error } = await supabase
+                    const { data, error } = await supabaseClient
                         .from('developments')
                         .insert([{
                             dev_id: `DEV-${Date.now()}`,
@@ -894,30 +897,31 @@ CREATE POLICY "Allow all for history" ON history
                 document.querySelectorAll('.type-card').forEach(card => {
                     card.classList.remove('selected');
                 });
+                currentType = '';
                 
                 // Recargar dashboard
                 loadDashboard();
                 
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error al crear la solicitud');
+                alert('❌ Error al crear la solicitud: ' + error.message);
             }
         }
 
-        // Cargar dashboard
+        // Cargar dashboard - CORREGIDO
         async function loadDashboard() {
-            if (!supabase) return;
+            if (!supabaseClient) return;
             
             try {
                 // Cargar incidencias
-                const { data: incidents } = await supabase
+                const { data: incidents } = await supabaseClient
                     .from('incidents')
                     .select('*')
                     .order('created_at', { ascending: false })
                     .limit(5);
                 
                 // Cargar desarrollos
-                const { data: developments } = await supabase
+                const { data: developments } = await supabaseClient
                     .from('developments')
                     .select('*')
                     .order('created_at', { ascending: false })
@@ -962,12 +966,12 @@ CREATE POLICY "Allow all for history" ON history
             }
         }
 
-        // Cargar incidencias
+        // Cargar incidencias - CORREGIDO
         async function loadIncidents() {
-            if (!supabase) return;
+            if (!supabaseClient) return;
             
             try {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('incidents')
                     .select('*')
                     .order('created_at', { ascending: false });
@@ -996,12 +1000,12 @@ CREATE POLICY "Allow all for history" ON history
             }
         }
 
-        // Cargar desarrollos
+        // Cargar desarrollos - CORREGIDO
         async function loadDevelopments() {
-            if (!supabase) return;
+            if (!supabaseClient) return;
             
             try {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('developments')
                     .select('*')
                     .order('created_at', { ascending: false });
