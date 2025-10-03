@@ -369,6 +369,121 @@
             border-left-color: var(--danger);
         }
 
+        .login-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-modal.active {
+            display: flex;
+        }
+
+        .login-box {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .admin-badge {
+            background: var(--purple);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+
+        .image-preview {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .image-preview img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid var(--light);
+        }
+
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .file-upload input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-upload label {
+            display: block;
+            padding: 10px 15px;
+            background: var(--light);
+            border: 2px dashed var(--gray);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload label:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .status-controls {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--light);
+        }
+
+        .status-select {
+            display: inline-block;
+            padding: 5px 10px;
+            border: 1px solid var(--light);
+            border-radius: 5px;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+
+        .btn-small {
+            padding: 5px 15px;
+            font-size: 0.9em;
+        }
+
+        .incident-images {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .incident-images img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -386,6 +501,25 @@
     <!-- Estado de conexión -->
     <div id="syncStatus" class="sync-status disconnected">
         <span>⚠️</span> Supabase no configurado
+    </div>
+
+    <!-- Modal de Login para Administradores -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-box">
+            <h3 style="margin-bottom: 20px;">🔐 Login Administrador</h3>
+            <div class="form-group">
+                <label>Usuario:</label>
+                <input type="text" id="loginUsername" placeholder="admin">
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="loginPassword" placeholder="********">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="doLogin()">Iniciar Sesión</button>
+                <button class="btn" onclick="closeLogin()" style="background: var(--gray); color: white;">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     <div class="container">
@@ -424,7 +558,22 @@
                     <p>2. Click en <strong>"New Query"</strong></p>
                     <p>3. <strong>Copia y pega</strong> este código SQL:</p>
                     <pre>
--- Crear tabla de incidencias
+-- Crear tabla de usuarios admin
+CREATE TABLE admin_users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(100) NOT NULL,
+  full_name VARCHAR(100),
+  role VARCHAR(20) DEFAULT 'admin',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Insertar usuarios admin de ejemplo (cambia las contraseñas)
+INSERT INTO admin_users (username, password, full_name, role) VALUES
+  ('admin', 'Admin123!', 'Administrador', 'admin'),
+  ('supervisor', 'Super123!', 'Supervisor', 'admin');
+
+-- Crear tabla de incidencias con soporte para imágenes
 CREATE TABLE incidents (
   id SERIAL PRIMARY KEY,
   incident_id VARCHAR(50) UNIQUE NOT NULL,
@@ -436,11 +585,14 @@ CREATE TABLE incidents (
   priority VARCHAR(20),
   category VARCHAR(50),
   steps TEXT,
+  image_urls TEXT[], -- Array de URLs de imágenes
+  assigned_to VARCHAR(100),
+  resolution_notes TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Crear tabla de desarrollos
+-- Crear tabla de desarrollos con soporte para imágenes
 CREATE TABLE developments (
   id SERIAL PRIMARY KEY,
   dev_id VARCHAR(50) UNIQUE NOT NULL,
@@ -455,6 +607,9 @@ CREATE TABLE developments (
   budget VARCHAR(100),
   justification TEXT,
   acceptance TEXT,
+  image_urls TEXT[], -- Array de URLs de imágenes
+  assigned_to VARCHAR(100),
+  approval_notes TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -466,15 +621,20 @@ CREATE TABLE history (
   item_type VARCHAR(20),
   action TEXT,
   user_name VARCHAR(100),
+  details TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Habilitar RLS (Row Level Security)
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE developments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE history ENABLE ROW LEVEL SECURITY;
 
 -- Crear políticas para permitir acceso
+CREATE POLICY "Allow read admin_users" ON admin_users
+  FOR SELECT USING (true);
+
 CREATE POLICY "Allow all for incidents" ON incidents
   FOR ALL USING (true) WITH CHECK (true);
 
@@ -485,10 +645,25 @@ CREATE POLICY "Allow all for history" ON history
   FOR ALL USING (true) WITH CHECK (true);</pre>
                     <p>4. Click en <strong>"Run"</strong> (botón verde)</p>
                     <p>5. Deberías ver <strong>"Success. No rows returned"</strong></p>
+                    <p>⚠️ <strong>IMPORTANTE:</strong> Cambia las contraseñas de los usuarios admin después de crear las tablas</p>
                 </div>
 
                 <div class="step">
-                    <h3>🔑 Paso 4: Obtener las credenciales</h3>
+                    <h3>📸 Paso 4: Configurar Storage para Imágenes</h3>
+                    <p>1. Ve a <strong>"Storage"</strong> en el menú lateral</p>
+                    <p>2. Click en <strong>"Create a new bucket"</strong></p>
+                    <p>3. Nombre del bucket: <code>request-images</code></p>
+                    <p>4. <strong>Marca la opción "Public bucket"</strong> ✅</p>
+                    <p>5. Click en <strong>"Create bucket"</strong></p>
+                    <p>6. Click en el bucket creado y ve a <strong>"Policies"</strong></p>
+                    <p>7. Click en <strong>"New Policy"</strong> → <strong>"For full customization"</strong></p>
+                    <p>8. Nombre: <code>Allow all</code></p>
+                    <p>9. Policy definition: <code>true</code></p>
+                    <p>10. Selecciona <strong>ALL</strong> operations y click en <strong>"Save"</strong></p>
+                </div>
+
+                <div class="step">
+                    <h3>🔑 Paso 5: Obtener las credenciales</h3>
                     <p>1. Ve a <strong>"Settings"</strong> → <strong>"API"</strong></p>
                     <p>2. Copia estos dos valores:</p>
                     <ul style="margin-left: 20px;">
@@ -544,6 +719,10 @@ CREATE POLICY "Allow all for history" ON history
                 <button class="tab" onclick="switchTab('newRequest')">➕ Nueva Solicitud</button>
                 <button class="tab" onclick="switchTab('incidents')">📋 Incidencias</button>
                 <button class="tab" onclick="switchTab('developments')">💡 Desarrollos</button>
+                <button id="adminTab" class="tab" onclick="openLogin()" style="margin-left: auto;">
+                    🔐 Admin
+                    <span id="adminBadge" class="admin-badge" style="display: none;"></span>
+                </button>
             </div>
 
             <!-- Dashboard Tab -->
@@ -630,6 +809,18 @@ CREATE POLICY "Allow all for history" ON history
                             </div>
                         </div>
 
+                        <div class="form-group">
+                            <label>📸 Adjuntar Imágenes (opcional)</label>
+                            <div class="file-upload">
+                                <input type="file" id="imageUpload" accept="image/*" multiple onchange="previewImages(event)">
+                                <label for="imageUpload">
+                                    Click aquí para seleccionar imágenes<br>
+                                    <small>Puedes seleccionar múltiples archivos</small>
+                                </label>
+                            </div>
+                            <div id="imagePreview" class="image-preview"></div>
+                        </div>
+
                         <button type="submit" class="btn btn-primary">
                             📤 Enviar Solicitud
                         </button>
@@ -660,6 +851,8 @@ CREATE POLICY "Allow all for history" ON history
         let supabaseClient = null;
         let isConnected = false;
         let currentType = '';
+        let selectedImages = [];
+        let currentAdmin = null;
 
         // Conectar con Supabase
         async function connectSupabase() {
@@ -787,6 +980,13 @@ CREATE POLICY "Allow all for history" ON history
                 document.getElementById('syncStatus').innerHTML = '<span>✅</span> Conectado a Supabase';
                 document.getElementById('successMessage').classList.add('active');
                 
+                // Verificar si hay un admin logueado
+                const savedAdmin = localStorage.getItem('currentAdmin');
+                if (savedAdmin) {
+                    currentAdmin = JSON.parse(savedAdmin);
+                    updateAdminUI();
+                }
+                
                 console.log('✅ Conexión exitosa!');
                 
                 // Mostrar contenido principal
@@ -801,6 +1001,124 @@ CREATE POLICY "Allow all for history" ON history
                 alert(`❌ Error inesperado:\n\n${error.toString()}\n\n` +
                       `Abre la consola del navegador (F12) para más detalles.`);
             }
+        }
+
+        // Funciones de Login Admin
+        function openLogin() {
+            document.getElementById('loginModal').classList.add('active');
+        }
+
+        function closeLogin() {
+            document.getElementById('loginModal').classList.remove('active');
+        }
+
+        async function doLogin() {
+            if (!supabaseClient) {
+                alert('❌ Primero conecta con Supabase');
+                return;
+            }
+
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('admin_users')
+                    .select('*')
+                    .eq('username', username)
+                    .eq('password', password)
+                    .single();
+
+                if (error || !data) {
+                    alert('❌ Usuario o contraseña incorrectos');
+                    return;
+                }
+
+                currentAdmin = data;
+                localStorage.setItem('currentAdmin', JSON.stringify(data));
+                updateAdminUI();
+                closeLogin();
+                alert(`✅ Bienvenido ${data.full_name}!`);
+                loadDashboard();
+
+            } catch (error) {
+                console.error('Error login:', error);
+                alert('❌ Error al iniciar sesión');
+            }
+        }
+
+        function logout() {
+            currentAdmin = null;
+            localStorage.removeItem('currentAdmin');
+            updateAdminUI();
+            alert('👋 Sesión cerrada');
+        }
+
+        function updateAdminUI() {
+            const adminBadge = document.getElementById('adminBadge');
+            const adminTab = document.getElementById('adminTab');
+            
+            if (currentAdmin) {
+                adminBadge.textContent = currentAdmin.full_name;
+                adminBadge.style.display = 'inline';
+                adminTab.onclick = logout;
+                adminTab.innerHTML = '🔓 Logout' + adminBadge.outerHTML;
+            } else {
+                adminBadge.style.display = 'none';
+                adminTab.onclick = openLogin;
+                adminTab.innerHTML = '🔐 Admin';
+            }
+        }
+
+        // Preview de imágenes
+        function previewImages(event) {
+            const files = event.target.files;
+            const preview = document.getElementById('imagePreview');
+            preview.innerHTML = '';
+            selectedImages = [];
+
+            for (let file of files) {
+                selectedImages.push(file);
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    preview.appendChild(img);
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Subir imágenes a Supabase Storage
+        async function uploadImages(itemId) {
+            if (selectedImages.length === 0) return [];
+            
+            const imageUrls = [];
+            
+            for (let i = 0; i < selectedImages.length; i++) {
+                const file = selectedImages[i];
+                const fileName = `${itemId}_${Date.now()}_${i}.${file.name.split('.').pop()}`;
+                
+                try {
+                    const { data, error } = await supabaseClient.storage
+                        .from('request-images')
+                        .upload(fileName, file);
+                    
+                    if (error) throw error;
+                    
+                    // Obtener URL pública
+                    const { publicURL } = supabaseClient.storage
+                        .from('request-images')
+                        .getPublicUrl(fileName);
+                    
+                    imageUrls.push(publicURL);
+                } catch (error) {
+                    console.error('Error subiendo imagen:', error);
+                }
+            }
+            
+            return imageUrls;
         }
 
         // Cambiar pestaña
@@ -845,7 +1163,7 @@ CREATE POLICY "Allow all for history" ON history
             }
         }
 
-        // Crear solicitud - CORREGIDO
+        // Crear solicitud con imágenes
         async function createRequest(event) {
             event.preventDefault();
             if (!supabaseClient) {
@@ -859,35 +1177,74 @@ CREATE POLICY "Allow all for history" ON history
             const requester = document.getElementById('requester').value;
             
             try {
+                const timestamp = Date.now();
+                let itemId, imageUrls = [];
+                
                 if (currentType === 'incident') {
+                    itemId = `INC-${timestamp}`;
+                    
+                    // Subir imágenes primero
+                    imageUrls = await uploadImages(itemId);
+                    
                     const { data, error } = await supabaseClient
                         .from('incidents')
                         .insert([{
-                            incident_id: `INC-${Date.now()}`,
+                            incident_id: itemId,
                             title,
                             description,
                             department,
                             requester,
                             priority: document.getElementById('priority').value,
-                            status: 'new'
+                            status: 'new',
+                            image_urls: imageUrls.length > 0 ? imageUrls : null
                         }]);
                     
                     if (error) throw error;
+                    
+                    // Registrar en historial
+                    await supabaseClient
+                        .from('history')
+                        .insert([{
+                            item_id: itemId,
+                            item_type: 'incident',
+                            action: 'Incidencia creada',
+                            user_name: requester,
+                            details: `Nueva incidencia: ${title}`
+                        }]);
+                    
                     alert('✅ Incidencia creada exitosamente!');
                 } else {
+                    itemId = `DEV-${timestamp}`;
+                    
+                    // Subir imágenes primero
+                    imageUrls = await uploadImages(itemId);
+                    
                     const { data, error } = await supabaseClient
                         .from('developments')
                         .insert([{
-                            dev_id: `DEV-${Date.now()}`,
+                            dev_id: itemId,
                             title,
                             description,
                             department,
                             requester,
                             impact: document.getElementById('impact').value,
-                            status: 'pending'
+                            status: 'pending',
+                            image_urls: imageUrls.length > 0 ? imageUrls : null
                         }]);
                     
                     if (error) throw error;
+                    
+                    // Registrar en historial
+                    await supabaseClient
+                        .from('history')
+                        .insert([{
+                            item_id: itemId,
+                            item_type: 'development',
+                            action: 'Solicitud creada',
+                            user_name: requester,
+                            details: `Nueva solicitud de desarrollo: ${title}`
+                        }]);
+                    
                     alert('✅ Solicitud de desarrollo creada!');
                 }
                 
@@ -898,6 +1255,8 @@ CREATE POLICY "Allow all for history" ON history
                     card.classList.remove('selected');
                 });
                 currentType = '';
+                selectedImages = [];
+                document.getElementById('imagePreview').innerHTML = '';
                 
                 // Recargar dashboard
                 loadDashboard();
@@ -908,7 +1267,50 @@ CREATE POLICY "Allow all for history" ON history
             }
         }
 
-        // Cargar dashboard - CORREGIDO
+        // Cambiar estado (solo admin)
+        async function changeStatus(itemId, itemType, newStatus) {
+            if (!currentAdmin) {
+                alert('❌ Solo los administradores pueden cambiar el estado');
+                return;
+            }
+
+            try {
+                const table = itemType === 'incident' ? 'incidents' : 'developments';
+                const idField = itemType === 'incident' ? 'incident_id' : 'dev_id';
+                
+                const { error } = await supabaseClient
+                    .from(table)
+                    .update({ 
+                        status: newStatus,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq(idField, itemId);
+
+                if (error) throw error;
+
+                // Registrar en historial
+                await supabaseClient
+                    .from('history')
+                    .insert([{
+                        item_id: itemId,
+                        item_type: itemType,
+                        action: `Estado cambiado a: ${newStatus}`,
+                        user_name: currentAdmin.full_name,
+                        details: `Admin ${currentAdmin.full_name} cambió el estado a ${newStatus}`
+                    }]);
+
+                alert('✅ Estado actualizado');
+                loadDashboard();
+                loadIncidents();
+                loadDevelopments();
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al actualizar estado');
+            }
+        }
+
+        // Cargar dashboard con imágenes
         async function loadDashboard() {
             if (!supabaseClient) return;
             
@@ -947,18 +1349,53 @@ CREATE POLICY "Allow all for history" ON history
                 if (allItems.length === 0) {
                     container.innerHTML = '<p style="text-align: center; color: var(--gray);">No hay solicitudes aún. Crea una nueva.</p>';
                 } else {
-                    container.innerHTML = allItems.map(item => `
-                        <div class="incident-card ${item.priority || item.impact || ''}">
-                            <h4>${item.incident_id ? '🐛' : '🚀'} ${item.title}</h4>
-                            <p style="color: var(--gray);">${item.description}</p>
-                            <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em; color: var(--gray);">
-                                <span>📌 ${item.incident_id || item.dev_id}</span>
-                                <span>👤 ${item.requester}</span>
-                                <span>🏢 ${item.department}</span>
-                                <span>📅 ${new Date(item.created_at).toLocaleDateString()}</span>
+                    container.innerHTML = allItems.map(item => {
+                        const isIncident = !!item.incident_id;
+                        const itemId = item.incident_id || item.dev_id;
+                        const itemType = isIncident ? 'incident' : 'development';
+                        const priority = item.priority || item.impact || '';
+                        
+                        // Imágenes
+                        const imagesHtml = item.image_urls && item.image_urls.length > 0 ? 
+                            `<div class="incident-images">
+                                ${item.image_urls.map(url => `<img src="${url}" alt="imagen" onclick="window.open('${url}', '_blank')">`).join('')}
+                            </div>` : '';
+                        
+                        // Controles de admin
+                        const adminControls = currentAdmin ? 
+                            `<div class="status-controls">
+                                <select class="status-select" onchange="changeStatus('${itemId}', '${itemType}', this.value)">
+                                    <option value="${item.status}" selected>${item.status}</option>
+                                    ${isIncident ? `
+                                        <option value="new">Nuevo</option>
+                                        <option value="progress">En Progreso</option>
+                                        <option value="resolved">Resuelto</option>
+                                        <option value="closed">Cerrado</option>
+                                    ` : `
+                                        <option value="pending">Pendiente</option>
+                                        <option value="in-progress">En Progreso</option>
+                                        <option value="completed">Completado</option>
+                                        <option value="cancelled">Cancelado</option>
+                                    `}
+                                </select>
+                                <small>Estado actual: ${item.status}</small>
+                            </div>` : '';
+                        
+                        return `
+                            <div class="incident-card ${priority}">
+                                <h4>${isIncident ? '🐛' : '🚀'} ${item.title}</h4>
+                                <p style="color: var(--gray);">${item.description}</p>
+                                ${imagesHtml}
+                                <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em; color: var(--gray);">
+                                    <span>📌 ${itemId}</span>
+                                    <span>👤 ${item.requester}</span>
+                                    <span>🏢 ${item.department}</span>
+                                    <span>📅 ${new Date(item.created_at).toLocaleDateString()}</span>
+                                </div>
+                                ${adminControls}
                             </div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
                 
             } catch (error) {
@@ -966,7 +1403,7 @@ CREATE POLICY "Allow all for history" ON history
             }
         }
 
-        // Cargar incidencias - CORREGIDO
+        // Cargar incidencias con controles admin
         async function loadIncidents() {
             if (!supabaseClient) return;
             
@@ -982,25 +1419,48 @@ CREATE POLICY "Allow all for history" ON history
                 if (!data || data.length === 0) {
                     container.innerHTML = '<p style="text-align: center; color: var(--gray);">No hay incidencias registradas.</p>';
                 } else {
-                    container.innerHTML = data.map(item => `
-                        <div class="incident-card ${item.priority}">
-                            <h4>🐛 ${item.title}</h4>
-                            <p>${item.description}</p>
-                            <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em;">
-                                <span>📌 ${item.incident_id}</span>
-                                <span>👤 ${item.requester}</span>
-                                <span>🚨 ${item.priority}</span>
-                                <span>📊 ${item.status}</span>
+                    container.innerHTML = data.map(item => {
+                        // Imágenes
+                        const imagesHtml = item.image_urls && item.image_urls.length > 0 ? 
+                            `<div class="incident-images">
+                                ${item.image_urls.map(url => `<img src="${url}" alt="imagen" onclick="window.open('${url}', '_blank')">`).join('')}
+                            </div>` : '';
+                        
+                        // Controles de admin
+                        const adminControls = currentAdmin ? 
+                            `<div class="status-controls">
+                                <select class="status-select" onchange="changeStatus('${item.incident_id}', 'incident', this.value)">
+                                    <option value="${item.status}" selected>${item.status}</option>
+                                    <option value="new">Nuevo</option>
+                                    <option value="progress">En Progreso</option>
+                                    <option value="resolved">Resuelto</option>
+                                    <option value="closed">Cerrado</option>
+                                </select>
+                                <small>Estado actual: ${item.status}</small>
+                            </div>` : '';
+                        
+                        return `
+                            <div class="incident-card ${item.priority}">
+                                <h4>🐛 ${item.title}</h4>
+                                <p>${item.description}</p>
+                                ${imagesHtml}
+                                <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em;">
+                                    <span>📌 ${item.incident_id}</span>
+                                    <span>👤 ${item.requester}</span>
+                                    <span>🚨 ${item.priority}</span>
+                                    <span>📊 ${item.status}</span>
+                                </div>
+                                ${adminControls}
                             </div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
             } catch (error) {
                 console.error('Error:', error);
             }
         }
 
-        // Cargar desarrollos - CORREGIDO
+        // Cargar desarrollos con controles admin
         async function loadDevelopments() {
             if (!supabaseClient) return;
             
@@ -1016,18 +1476,41 @@ CREATE POLICY "Allow all for history" ON history
                 if (!data || data.length === 0) {
                     container.innerHTML = '<p style="text-align: center; color: var(--gray);">No hay desarrollos registrados.</p>';
                 } else {
-                    container.innerHTML = data.map(item => `
-                        <div class="incident-card ${item.impact}">
-                            <h4>🚀 ${item.title}</h4>
-                            <p>${item.description}</p>
-                            <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em;">
-                                <span>📌 ${item.dev_id}</span>
-                                <span>👤 ${item.requester}</span>
-                                <span>💥 ${item.impact}</span>
-                                <span>📊 ${item.status}</span>
+                    container.innerHTML = data.map(item => {
+                        // Imágenes
+                        const imagesHtml = item.image_urls && item.image_urls.length > 0 ? 
+                            `<div class="incident-images">
+                                ${item.image_urls.map(url => `<img src="${url}" alt="imagen" onclick="window.open('${url}', '_blank')">`).join('')}
+                            </div>` : '';
+                        
+                        // Controles de admin
+                        const adminControls = currentAdmin ? 
+                            `<div class="status-controls">
+                                <select class="status-select" onchange="changeStatus('${item.dev_id}', 'development', this.value)">
+                                    <option value="${item.status}" selected>${item.status}</option>
+                                    <option value="pending">Pendiente</option>
+                                    <option value="in-progress">En Progreso</option>
+                                    <option value="completed">Completado</option>
+                                    <option value="cancelled">Cancelado</option>
+                                </select>
+                                <small>Estado actual: ${item.status}</small>
+                            </div>` : '';
+                        
+                        return `
+                            <div class="incident-card ${item.impact}">
+                                <h4>🚀 ${item.title}</h4>
+                                <p>${item.description}</p>
+                                ${imagesHtml}
+                                <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em;">
+                                    <span>📌 ${item.dev_id}</span>
+                                    <span>👤 ${item.requester}</span>
+                                    <span>💥 ${item.impact}</span>
+                                    <span>📊 ${item.status}</span>
+                                </div>
+                                ${adminControls}
                             </div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
             } catch (error) {
                 console.error('Error:', error);
