@@ -6,8 +6,8 @@
     <title>Sistema de Gestión OPT - Supabase</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase SDK - Versión estable -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@1.35.7/dist/umd/supabase.min.js"></script>
     
     <style>
         * {
@@ -657,7 +657,7 @@ CREATE POLICY "Allow all for history" ON history
 
     <script>
         // Variables globales
-        let supabase = null;
+        let supabaseClient = null;
         let isConnected = false;
         let currentType = '';
 
@@ -688,12 +688,20 @@ CREATE POLICY "Allow all for history" ON history
                 console.log('URL:', url);
                 console.log('Key (primeros caracteres):', key.substring(0, 20) + '...');
                 
-                // Inicializar Supabase
-                supabase = window.supabase.createClient(url, key);
+                // Inicializar Supabase (versión 1.x)
+                if (typeof supabase !== 'undefined') {
+                    console.log('Usando Supabase v1.x');
+                    supabaseClient = supabase.createClient(url, key);
+                } else if (window.supabase) {
+                    console.log('Usando window.supabase');
+                    supabaseClient = window.supabase.createClient(url, key);
+                } else {
+                    throw new Error('Supabase SDK no cargado correctamente');
+                }
                 
                 // Probar conexión con una consulta simple
                 console.log('Probando conexión...');
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('incidents')
                     .select('*')
                     .limit(1);
